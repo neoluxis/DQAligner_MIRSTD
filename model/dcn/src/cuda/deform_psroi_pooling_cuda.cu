@@ -304,6 +304,7 @@ deform_psroi_pooling_cuda_forward(const at::Tensor &input,
 
   if (out.numel() == 0)
   {
+<<<<<<< HEAD
     AT_CUDA_CHECK(cudaGetLastError());
     return std::make_tuple(out, top_count);
   }
@@ -312,6 +313,16 @@ deform_psroi_pooling_cuda_forward(const at::Tensor &input,
   dim3 block(512);
 
   AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "deform_psroi_pooling_cuda_forward", [&] {
+=======
+    THCudaCheck(cudaGetLastError());
+    return std::make_tuple(out, top_count);
+  }
+
+  dim3 grid(std::min(THCCeilDiv(out_size, 512L), 4096L));
+  dim3 block(512);
+
+  AT_DISPATCH_FLOATING_TYPES(input.type(), "deform_psroi_pooling_cuda_forward", [&] {
+>>>>>>> c586f3939f53e6af6572ea12d9f92903ee6f0755
     DeformablePSROIPoolForwardKernel<scalar_t><<<grid, block, 0, stream>>>(
         out_size,
         input.contiguous().data<scalar_t>(),
@@ -333,7 +344,11 @@ deform_psroi_pooling_cuda_forward(const at::Tensor &input,
         out.data<scalar_t>(),
         top_count.data<scalar_t>());
   });
+<<<<<<< HEAD
   AT_CUDA_CHECK(cudaGetLastError());
+=======
+  THCudaCheck(cudaGetLastError());
+>>>>>>> c586f3939f53e6af6572ea12d9f92903ee6f0755
   return std::make_tuple(out, top_count);
 }
 
@@ -377,6 +392,7 @@ deform_psroi_pooling_cuda_backward(const at::Tensor &out_grad,
 
   if (input_grad.numel() == 0)
   {
+<<<<<<< HEAD
     AT_CUDA_CHECK(cudaGetLastError());
     return std::make_tuple(input_grad, trans_grad);
   }
@@ -386,6 +402,17 @@ deform_psroi_pooling_cuda_backward(const at::Tensor &out_grad,
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
   AT_DISPATCH_FLOATING_TYPES(out_grad.scalar_type(), "deform_psroi_pooling_cuda_backward", [&] {
+=======
+    THCudaCheck(cudaGetLastError());
+    return std::make_tuple(input_grad, trans_grad);
+  }
+
+  dim3 grid(std::min(THCCeilDiv(out_size, 512L), 4096L));
+  dim3 block(512);
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+  AT_DISPATCH_FLOATING_TYPES(out_grad.type(), "deform_psroi_pooling_cuda_backward", [&] {
+>>>>>>> c586f3939f53e6af6572ea12d9f92903ee6f0755
     DeformablePSROIPoolBackwardAccKernel<scalar_t><<<grid, block, 0, stream>>>(
         out_size,
         out_grad.contiguous().data<scalar_t>(),
@@ -411,6 +438,10 @@ deform_psroi_pooling_cuda_backward(const at::Tensor &out_grad,
         num_classes,
         channels_each_class);
   });
+<<<<<<< HEAD
   AT_CUDA_CHECK(cudaGetLastError());
+=======
+  THCudaCheck(cudaGetLastError());
+>>>>>>> c586f3939f53e6af6572ea12d9f92903ee6f0755
   return std::make_tuple(input_grad, trans_grad);
 }
