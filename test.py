@@ -276,7 +276,7 @@ if __name__ == '__main__':
         trainer.ModelPath = args.weight_path
         trainer.test_save = trainer.SavePath + 'visual_results/'
         # compare_weights(trainer.net, torch.load(trainer.ModelPath, map_location=trainer.device))
-        trainer.net = torch.load(trainer.ModelPath, map_location=trainer.device)
+        trainer.net = torch.load(trainer.ModelPath, map_location=trainer.device, weights_only=False) # weight only 参数 torch 新版加载方式
 
         print('load weight OK!')
         epoch = args.epochs
