@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import cv2
 from PIL import Image
+from tqdm import tqdm
 
 
 def parse_gt(gt_path: Path):
@@ -84,7 +85,7 @@ def main():
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     vw = cv2.VideoWriter(args.out, fourcc, args.fps, (w, h))
 
-    for i, p in enumerate(imgs):
+    for i, p in enumerate(tqdm(imgs, desc=f'seq {args.id}')):
         im = cv2.imread(str(p))
         if im is None:
             continue
@@ -97,6 +98,8 @@ def main():
         if bbox:
             x1, y1, x2, y2 = bbox
             cv2.rectangle(im, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        label = f'id={args.id} file={p.name}'
+        cv2.putText(im, label, (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA)
         vw.write(im)
 
     vw.release()

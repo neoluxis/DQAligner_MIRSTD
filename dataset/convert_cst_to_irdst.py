@@ -15,7 +15,7 @@ import os
 import shutil
 from pathlib import Path
 from PIL import Image, ImageDraw
-
+from tqdm import tqdm
 
 def parse_gt(gt_path):
     if not gt_path.exists():
@@ -76,7 +76,7 @@ def next_ids(dst_images: Path, count: int):
     return list(range(start, start + count))
 
 
-def copy_sequence(src_seq: Path, dst_images: Path, dst_masks: Path = None, make_masks: bool = True):
+def copy_sequence(src_seq: Path, dst_images: Path, dst_masks: Path = None, make_masks: bool = True, seq_id: str = ''):
     # src_seq contains image files and gt.txt, IR_label.json
     frames = sorted([p for p in src_seq.iterdir() if p.suffix.lower() in ('.jpg', '.jpeg', '.png')])
     if not frames:
@@ -90,7 +90,7 @@ def copy_sequence(src_seq: Path, dst_images: Path, dst_masks: Path = None, make_
     if dst_masks and make_masks:
         ensure_dir(dst_masks)
 
-    for i, src_img in enumerate(frames):
+    for i, src_img in enumerate(tqdm(frames, desc=f'{src_seq.name} -> {seq_id}', leave=False)):
         dst_img = dst_images / src_img.name
         try:
             # use copy to keep files portable
@@ -161,7 +161,7 @@ def main():
     ensure_dir(imageset_file.parent)
 
     with imageset_file.open('a') as isf:
-        for seq_dir, seq_id in zip(seq_dirs, ids):
+        for seq_dir, seq_id in tqdm(zip(seq_dirs, ids), total=len(seq_dirs), desc=f'{args.split} sequences'):
             dst_images = dst_images_root / str(seq_id)
             dst_masks = dst_masks_root / str(seq_id)
             ensure_dir(dst_images)
@@ -174,7 +174,13 @@ def main():
                             os.symlink(os.path.abspath(f), str(target))
             else:
                 # do copy by reusing copy_sequence logic
-                copy_sequence(seq_dir, dst_images, dst_masks if args.make_masks else None, make_masks=args.make_masks)
+                copy_sequence(
+                    seq_dir,
+                    dst_images,
+                    dst_masks if args.make_masks else None,
+                    make_masks=args.make_masks,
+                    seq_id=str(seq_id),
+                )
 
             isf.write(str(seq_id) + '\n')
 
