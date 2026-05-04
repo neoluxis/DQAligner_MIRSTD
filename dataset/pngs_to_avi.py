@@ -65,7 +65,7 @@ def natural_key(text):
 def list_png_files(input_dir):
     files = [
         name for name in os.listdir(input_dir)
-        if name.lower().endswith(".png") and os.path.isfile(os.path.join(input_dir, name))
+        if( name.lower().endswith(".png") or name.lower().endswith(".jpg"))and os.path.isfile(os.path.join(input_dir, name))
     ]
     files.sort(key=natural_key)
     return files

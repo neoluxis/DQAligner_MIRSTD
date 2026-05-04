@@ -12,7 +12,7 @@ def parse_args_avi():
     parser.add_argument('--saveDir', type=str, default='./results/', help='Save path [defaule: ./results/]')
     parser.add_argument('--weight_path', type=str,
                         # default='results/NUDT-MIRSDT/DQAligner/weight_NUDT-MIRSDT.pth',
-                        default='/home/neolux/workspace/2026/Magistro/小目标识别/code/Learning_Global-Deng/DQAligner_MIRSTD/results/IRDST/DQAligner/weight_IRDST.pth',
+                        default='results/IRDST/DQAligner_DeepSupFalse_adafocal_2026_04_25__00_02_55/Epoch_5_0.81499_best.pth',
                         help='model weight path')
     parser.add_argument('--model', type=str, default='DQAligner_test_visual',
                         help='ResUNet_DTUM, DNANet_DTUM, ACM, ALCNet, ResUNet, DNANet, ISNet, UIU')
@@ -23,10 +23,10 @@ def parse_args_avi():
     # 新增AVI处理参数
     parser.add_argument('--avi_path', type=str,
                         # default='./TEST_video/',
-                        default='/home/neolux/workspace/2026/Magistro/小目标识别/code/Learning_Global-Deng/DQAligner_MIRSTD/TEST_video',
+                        default='../CST_AntiUAV/avi/train/building_19.avi',
                         help='Input AVI video path or directory [default: ./TEST_video/]')
     parser.add_argument('--output_path', type=str, default=None,
-                        help='Output directory for results [default: results/{dataset}/test_avi_results/]')
+                        help='Output directory for results [default: test/{dataset}/CST/]')
     parser.add_argument('--max_age', type=int, default=30,
                         help='Maximum age for tracking [default: 30]')
     parser.add_argument('--iou_threshold', type=float, default=0.3,
@@ -426,7 +426,7 @@ class AVIProcessor:
         self.net = self.net.to(self.device)
         
         # 加载权重
-        checkpoint = torch.load(args.weight_path, map_location=self.device)
+        checkpoint = torch.load(args.weight_path, map_location=self.device, weights_only=False)
         # 处理两种情况：state_dict或完整模型
         if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
             self.net.load_state_dict(checkpoint['state_dict'])
