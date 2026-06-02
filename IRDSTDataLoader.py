@@ -21,6 +21,51 @@ def extract_numbers(filename):
     return 0  # 如果没有匹配的括号数字，返回0
 
 
+def frame_sort_key(path):
+    stem = os.path.splitext(os.path.basename(path))[0]
+    if stem.isdigit():
+        return int(stem)
+    return stem
+
+
+def list_video_frames(img_root, video_name):
+    patterns = ('*.png', '*.jpg', '*.jpeg', '*.JPG', '*.JPEG', '*.PNG')
+    frames = []
+    for pat in patterns:
+        frames.extend(glob.glob(os.path.join(img_root, video_name, pat)))
+    frames = sorted(set(frames), key=frame_sort_key)
+    return frames
+
+
+def resolve_img_path(img_root, video_name, frame_name):
+    for ext in ('.png', '.jpg', '.jpeg', '.PNG', '.JPG', '.JPEG'):
+        p = os.path.join(img_root, video_name, frame_name + ext)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def fit_seq_to_512(img_seq, mask_seq, patch_size=512):
+    """Center-crop if larger than patch_size, then zero-pad if smaller."""
+    _, _, h, w = img_seq.shape
+
+    if h > patch_size:
+        top = (h - patch_size) // 2
+        img_seq = img_seq[:, :, top:top + patch_size, :]
+        mask_seq = mask_seq[:, :, top:top + patch_size, :]
+    if w > patch_size:
+        left = (w - patch_size) // 2
+        img_seq = img_seq[:, :, :, left:left + patch_size]
+        mask_seq = mask_seq[:, :, :, left:left + patch_size]
+
+    _, _, h2, w2 = img_seq.shape
+    img_pad = np.zeros((img_seq.shape[0], img_seq.shape[1], patch_size, patch_size), dtype=img_seq.dtype)
+    mask_pad = np.zeros((mask_seq.shape[0], mask_seq.shape[1], patch_size, patch_size), dtype=mask_seq.dtype)
+    img_pad[:, :, 0:h2, 0:w2] = img_seq
+    mask_pad[:, :, 0:h2, 0:w2] = mask_seq
+    return img_pad, mask_pad
+
+
 def PadImg(img, times):
     h, w = img.shape
     if not h % times == 0:
@@ -159,8 +204,7 @@ class IRDST_TrainSetLoader(Dataset):
             video_names = [name.strip() for name in video_names]  # 去除列表中字符串元素首尾空白字符
             print('dataset-train num of videos: {}'.format(len(video_names)))
             for video_name in video_names:
-                frames = glob.glob(os.path.join(self.img_path, video_name, '*.png'))
-                frames = sorted(frames, key=extract_numbers)
+                frames = list_video_frames(self.img_path, video_name)
                 self.frames_info['dataset'][video_name] = [frame_path.split('/')[-1][:-4] for frame_path in
                                                            frames]  # 移除扩展名.png
                 self.imgs_arr.extend([('dataset', video_name, frame_index) for frame_index in range(len(frames))])
@@ -187,7 +231,9 @@ class IRDST_TrainSetLoader(Dataset):
             frame_name = self.frames_info[dataset][video_name][frame_id]
             frame_ids.append(frame_name)
 
-            img_path = os.path.join(self.img_path, video_name, frame_name + '.png')
+            img_path = resolve_img_path(self.img_path, video_name, frame_name)
+            if img_path is None:
+                raise FileNotFoundError(f'Image file not found for {video_name}/{frame_name}')
             gt_path = os.path.join(self.mask_path, video_name, frame_name + '.png')
             img_i = Image.open(img_path).convert('L')
             img_i = np.expand_dims(np.array(img_i, dtype=np.float32), axis=0)
@@ -212,16 +258,13 @@ class IRDST_TrainSetLoader(Dataset):
                 return img.permute(1, 0, 2, 3), mask[-1], h, w, frame_ids[-1]  # , mask[-1] frame_ids[-1]
 
         else:
-            img_pad = np.zeros([self.num_frames, 1, 512, 512])
-            mask_pad = np.zeros([self.num_frames, 1, 512, 512])
             """先增强后pad"""  # pad必须hw一致否则不同样本无法堆叠形成一个batch
             img = np.stack(img_list, axis=0)  # [t,c,h,w]
             mask = np.stack(mask_list, axis=0)
             img_aug, mask_aug = self.tranform(img, mask)  # t,c,h,w
 
-            _, _, actH, actW = img_aug.shape
-            img_pad[:, :, 0:actH, 0:actW] = img_aug
-            mask_pad[:, :, 0:actH, 0:actW] = mask_aug
+            # Support both large frames (crop) and small frames (pad).
+            img_pad, mask_pad = fit_seq_to_512(img_aug, mask_aug, patch_size=512)
 
             img_pad = torch.from_numpy(np.ascontiguousarray(img_pad)).float()
             mask_pad = torch.from_numpy(np.ascontiguousarray(mask_pad)).float()
@@ -256,8 +299,7 @@ class IRDST_TestSetLoader(Dataset):
             video_names = [name.strip() for name in video_names]  # 去除列表中字符串元素首尾空白字符
             print('dataset-test num of videos: {}'.format(len(video_names)))
             for video_name in video_names:
-                frames = glob.glob(os.path.join(self.img_path, video_name, '*.png'))
-                frames = sorted(frames, key=extract_numbers)
+                frames = list_video_frames(self.img_path, video_name)
                 self.frames_info['dataset'][video_name] = [frame_path.split('/')[-1][:-4] for frame_path in frames]
                 self.imgs_arr.extend([('dataset', video_name, frame_index) for frame_index in range(len(frames))])
 
@@ -282,45 +324,41 @@ class IRDST_TestSetLoader(Dataset):
             frame_name = self.frames_info[dataset][video_name][frame_id]
             frame_ids.append(frame_name)
 
-            img_path = os.path.join(self.img_path, video_name, frame_name + '.png')
+            img_path = resolve_img_path(self.img_path, video_name, frame_name)
+            if img_path is None:
+                raise FileNotFoundError(f'Image file not found for {video_name}/{frame_name}')
             gt_path = os.path.join(self.mask_path, video_name, frame_name + '.png')
             img_i = Image.open(img_path).convert('L')
             img_i = np.expand_dims(np.array(img_i, dtype=np.float32), axis=0)
             img_i = (img_i - self.test_mean) / self.test_std
-            img_list.append(torch.Tensor(img_i))
+            img_list.append(img_i)
 
             gt = Image.open(gt_path)
             gt = np.array(gt, dtype=np.float32)
             gt[gt > 0] = 255
             gt = np.expand_dims(gt / 255.0, axis=0)
-            mask_list.append(torch.Tensor(gt))  # c,1,h,w
+            mask_list.append(gt)  # c,1,h,w
 
         _, h, w = mask_list[-1].shape
         if h == 512 and w == 512:
             # Tgt preprocess
-            img = torch.Tensor(img_list).float()
-            mask = torch.Tensor(mask_list).float()
+            img = torch.from_numpy(np.ascontiguousarray(np.stack(img_list, axis=0))).float()
+            mask = torch.from_numpy(np.ascontiguousarray(np.stack(mask_list, axis=0))).float()
             if self.key_mode == 'mid':
-                return img.permute(1, 0, 2, 3), mask[2], h, w, frame_ids[2]
+                return img.permute(1, 0, 2, 3), mask[2], h, w, video_name, frame_ids[2]
             else:
-                return img.permute(1, 0, 2, 3), mask[-1], h, w, frame_ids[-1]
+                return img.permute(1, 0, 2, 3), mask[-1], h, w, video_name, frame_ids[-1]
 
         else:
-            mask_pad = np.zeros([512, 512])
-            if self.key_mode == 'mid':
-                mask_pad[0:h, 0:w] = mask_list[2]
-            else:
-                mask_pad[0:h, 0:w] = mask_list[-1]
-            mask_pad = np.expand_dims(mask_pad, axis=0)
-            img_pad = torch.zeros([self.num_frames, 1, 512, 512])
-            for i in range(self.num_frames):
-                img_pad[i, 0, 0:h, 0:w] = img_list[i]
-                # pad32
-                # img = PadImg(img_list[i][0], 32)
-                # img_pad.append(np.expand_dims(img, axis=0))
+            img_arr = np.stack(img_list, axis=0)
+            mask_arr = np.stack(mask_list, axis=0)
+            img_pad, mask_pad_seq = fit_seq_to_512(img_arr, mask_arr, patch_size=512)
 
             img_pad = torch.from_numpy(np.ascontiguousarray(img_pad)).float()
-            mask_pad = torch.from_numpy(np.ascontiguousarray(mask_pad)).float()
+            if self.key_mode == 'mid':
+                mask_pad = torch.from_numpy(np.ascontiguousarray(mask_pad_seq[2])).float()
+            else:
+                mask_pad = torch.from_numpy(np.ascontiguousarray(mask_pad_seq[-1])).float()
             if self.key_mode == 'mid':
                 return img_pad.permute(1, 0, 2, 3), mask_pad, h, w, video_name, frame_ids[2]
             else:

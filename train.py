@@ -25,7 +25,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Infrared_target_detection_overall')
     parser.add_argument('--DataPath', type=str, default='./dataset/', help='Dataset path [default: ./dataset/]')
     parser.add_argument('--dataset', type=str, default='IRDST', help='Dataset name [dafult: NUDT-MIRSDT],IRDST,TSIRMT')
-    parser.add_argument('--saveDir', type=str, default='./results/', help='Save path [defaule: ./results/]')
+    parser.add_argument('--saveDir', type=str, default='./results/CST/', help='Save path [defaule: ./results/]')
     parser.add_argument('--weight_path', type=str,
                         default='results/IRDST/DQAligner/weight_IRDST.pth',
                         help='Trained model path')
